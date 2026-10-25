@@ -1,0 +1,538 @@
+<title>Bancada de Som Ronco Mobi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Layout: painel de instrumentos em coluna única; leitura grande no topo, cenários, depois o carro virtual. */
+:root{--bg:#0e1114;--panel:#161b20;--line:#262e36;--fg:#e8edf1;--dim:#8d9aa6;--accent:#ffb020;--ok:#37d67a;--hot:#ff4d4d;color-scheme:dark;
+--display:"Barlow Condensed","Arial Narrow",sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+html,body{background:var(--bg)}
+body{color:var(--fg);font:15px/1.5 var(--body);padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:640px;margin:0 auto;display:grid;gap:18px}
+h1{font:700 30px/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0}
+h2{font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+p.sub{color:var(--dim);margin:6px 0 0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+.read{display:grid;grid-template-columns:1fr auto;gap:8px 16px;align-items:end}
+.kmh{font:700 84px/.9 var(--display);font-variant-numeric:tabular-nums}
+.kmh small{font:500 16px var(--mono);color:var(--dim);margin-left:6px}
+.stat{font:500 15px var(--mono);text-align:right;font-variant-numeric:tabular-nums;display:grid;gap:2px}
+.stat b{font:700 34px/1 var(--display);color:var(--accent)}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .08s}
+.lbl{display:flex;justify-content:space-between;font:400 12px var(--mono);color:var(--dim);margin-top:6px}
+button{font:600 15px var(--body);color:var(--fg);background:var(--line);border:1px solid #34404b;border-radius:6px;padding:10px 14px;cursor:pointer;min-height:44px}
+button:hover{border-color:var(--accent)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.go{background:var(--accent);color:#1a1200;border-color:var(--accent);width:100%;font-size:17px}
+button.go.on{background:var(--hot);border-color:var(--hot);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+label{display:grid;gap:4px;font:400 13px var(--mono);color:var(--dim);min-width:0}
+label span b{color:var(--fg);font-weight:500}
+select,input[type=range]{width:100%;min-width:0}
+select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:9px;font:15px var(--body)}
+input[type=range]{accent-color:var(--accent)}
+.chk{display:flex;gap:8px;align-items:center;flex-direction:row;color:var(--fg);font:15px var(--body)}
+canvas{width:100%;height:90px;display:block;border-radius:4px;background:var(--bg)}
+.note{font-size:13px;color:var(--dim)}
+.active{border-color:var(--accent)!important;color:var(--accent)}
+</style>
+<main>
+<header><h1>Bancada de Som Ronco Mobi</h1><p class="sub">O mesmo sintetizador e o mesmo modelo de rpm do app. Toque em Ligar e escolha um cenário.</p></header>
+<button class="go" id="power">Ligar o som</button>
+<section><div class="read"><div class="kmh"><span id="kmh">0</span><small>km/h</small></div>
+<div class="stat"><span>marcha <b id="gear">N</b></span><span><b id="rpm">850</b> rpm</span></div></div>
+<div class="bar"><i id="rbar"></i></div><div class="lbl"><span>850</span><span>rpm real do Mobi</span><span>6300</span></div>
+<div class="bar"><i id="lbar" style="background:var(--accent)"></i></div><div class="lbl"><span>carga estimada do pedal</span><span id="lpct">0%</span></div>
+<canvas id="spec" width="600" height="90"></canvas></section>
+<section><h2>Cenários</h2><div class="grid" id="scen"></div>
+<label style="margin-top:12px"><span>Velocidade manual: <b id="mv">0</b> km/h</span><input type="range" id="man" min="0" max="140" value="0"></label></section>
+<section><h2>Carro virtual</h2><div class="grid">
+<label><span>Potência: <b id="vcv">105</b> cv</span><input type="range" id="cv" min="50" max="700" step="5" value="105"></label>
+<label><span>Peso: <b id="vkg">1000</b> kg</span><input type="range" id="kg" min="600" max="2500" step="50" value="1000"></label>
+<label>Motor<select id="cyl"><option value="3">3 cilindros</option><option value="4" selected>4 cilindros (Mobi)</option><option value="6">V6</option><option value="8">V8</option><option value="10">V10</option><option value="12">V12</option></select></label>
+<label>Aspiração<select id="asp"><option value="0">Aspirado</option><option value="1" selected>Turbo</option><option value="2">Supercharger</option></select></label>
+<label>Condução<select id="drv"><option value="0">Econômico</option><option value="1" selected>Normal</option><option value="2">Esportivo</option></select></label>
+<label><span>Volume: <b id="vvol">70</b>%</span><input type="range" id="vol" min="0" max="100" value="70"></label></div>
+<h2 style="margin-top:16px">Motorista e pista</h2><div class="grid">
+<label><span>Jeito de dirigir: <b id="vag">50</b>% (0 suave, 100 pé fundo)</span><input type="range" id="ag" min="0" max="100" value="50"></label>
+<label><span>Ladeira: <b id="vgr">0</b>% (+ subida, − descida)</span><input type="range" id="gr" min="-10" max="10" value="0"></label></div>
+<label class="chk" style="margin-top:12px"><input type="checkbox" id="pops"> Estouros no escape</label>
+<p class="note">Mobi original: 75 cv, 1000 kg, 4 cilindros. Mais potência e menos peso deixam o som maior, mais grave e mais aberto. O rpm segue sempre o câmbio real do Mobi.</p></section>
+</main>
+<script>
+
+// ====================================================================================
+//  RoncoMobi - sintetizador de motor (prototipo JS; o EngineSynth.kt e a copia 1:1 deste arquivo)
+//  Cadeia: ignicao por cilindro (irregular) -> pulso de escape -> guia de onda do escapamento (comb)
+//          -> modos do abafador -> passa-baixas que abre com a carga;
+//          + admissao (pulsos + ruido de fluxo), graves do bloco, chiado de combustao, mecanico,
+//          + estouros, turbo (assobio/alivio/flutter) e supercharger. Saida: estereo quase-mono.
+// ====================================================================================
+const SR = 44100;
+const TAU = Math.PI * 2;
+
+class Rng {
+  constructor(seed) { this.s = (seed >>> 0) || 1; }
+  next() { let x = this.s; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; this.s = x; return x / 4294967296; }
+  sym() { return this.next() * 2 - 1; }
+  gauss() { return (this.next() + this.next() + this.next() - 1.5) * 2; }
+}
+function pole(fc) { return 1 - Math.exp(-TAU * fc / SR); }
+
+// filtro de estado variavel (TPT): estavel em baixa frequencia
+class SVF {
+  constructor() { this.a1 = 0; this.a2 = 0; this.a3 = 0; this.k = 1; this.c1 = 0; this.c2 = 0; this.lp = 0; this.bp = 0; this.hp = 0; }
+  set(fc, q) {
+    const g = Math.tan(Math.PI * Math.min(fc, SR * 0.45) / SR);
+    this.k = 1 / q; this.a1 = 1 / (1 + g * (g + this.k)); this.a2 = g * this.a1; this.a3 = g * this.a2;
+  }
+  run(x) {
+    const v3 = x - this.c2;
+    const v1 = this.a1 * this.c1 + this.a2 * v3;
+    const v2 = this.c2 + this.a2 * this.c1 + this.a3 * v3;
+    this.c1 = 2 * v1 - this.c1; this.c2 = 2 * v2 - this.c2;
+    this.bp = this.k * v1; this.lp = v2; this.hp = x - this.k * v1 - v2;
+    return this.bp;
+  }
+}
+
+class Bank {
+  constructor(delay) {
+    this.D = delay; this.buf = new Float64Array(1024); this.w = 0;
+    this.sA = 0; this.sD = 0; this.dmp = 0; this.ring = new Float64Array(64);
+    this.m1 = new SVF(); this.m2 = new SVF(); this.m3 = new SVF();
+    this.m1.set(105, 2.6); this.m2.set(235, 3.2); this.m3.set(430, 3.5);
+    this.l1 = 0; this.l2 = 0; this.s1 = 0; this.s2 = 0; this.b1 = new SVF(); this.b1.set(320, 0.7);
+  }
+}
+
+// constantes de calibracao
+const CAL = { master: 0.55, sub: 1.1, body: 0.9, exh: 0.75, intake: 0.55, rasp: 0.22, mech: 0.05 };
+
+class EngineDSP {
+  constructor() {
+    this.rng = new Rng(20241024);
+    this.phase = 0; this.rpmS = 900; this.thrS = 0.1; this.ovS = 0; this.sgS = 1; this.aggS = 1; this.lfS = 0.2;
+    this.cyl = 0; this.nSlots = 4; this.nBanks = 1; this.lastSlot = 0;
+    this.slotBank = new Int32Array(12); this.slotTarget = new Float64Array(12).fill(1); this.slotGain = new Float64Array(12).fill(1);
+    this.bankA = new Bank(489); this.bankB = new Bank(527);
+    this.iA = 0; this.iD = 0; this.iRing = new Float64Array(64); this.head = 0; this.iL = new SVF(); this.iR = new SVF(); this.iL1 = 0; this.iL2 = 0; this.iR1 = 0; this.iR2 = 0;
+    this.rasp1 = new SVF(); this.rasp1.set(950, 0.9); this.rasp2 = new SVF(); this.rasp2.set(1900, 1.0); this.raspEnv = 0;
+    this.mech = new SVF(); this.mech.set(2600, 2.0); this.mechEnv = 0;
+    this.lf = [0.13, 0.41, 0.77, 0.23]; this.idleHunt = 0; this.idleTgt = 0; this.idleCnt = 0;
+    this.hpL = new SVF(); this.hpL.set(46, 0.75); this.hpR = new SVF(); this.hpR.set(46, 0.75); this.shL = 0; this.shR = 0;
+    this.nT = 0; this.wh1 = 0; this.tw = new SVF(); this.tw.set(2100, 1.2); this.bovEnv = 0; this.bovSvf = new SVF(); this.bovSvf.set(2600, 1.0);
+    this.flut = 0; this.flutPh = 0; this.flutSvf = new SVF(); this.flutSvf.set(1000, 0.9); this.scPh = 0; this.scA = 0; this.scLP = 0; this.twL1 = 0; this.twL2 = 0;
+    this.nV = 8; this.vEnv = new Float64Array(8); this.vDec = new Float64Array(8); this.vTh = new Float64Array(8); this.vThD = new Float64Array(8);
+    this.vPh = new Float64Array(8); this.vF = new Float64Array(8); this.vSvf = []; for (let i = 0; i < 8; i++) this.vSvf.push(new SVF());
+    this.vDel = new Int32Array(8); this.vAmp = new Float64Array(8); this.nextV = 0;
+    this.setCyl(4);
+  }
+
+  setCyl(n) {
+    this.cyl = n; this.nSlots = n;
+    const pat = { 3: [0, 0, 0], 4: [0, 0, 0, 0], 6: [0, 1, 0, 1, 0, 1], 8: [0, 1, 1, 0, 1, 0, 0, 1],
+      10: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 12: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1] }[n] || [0, 0, 0, 0];
+    this.nBanks = n >= 6 ? 2 : 1;
+    const r = new Rng(n * 977 + 13);
+    const irr = n === 8 ? 0.10 : n === 4 ? 0.06 : n === 3 ? 0.08 : 0.045;
+    for (let i = 0; i < 12; i++) { this.slotBank[i] = i < n ? pat[i] : 0; this.slotTarget[i] = 1 + r.sym() * irr; this.slotGain[i] = this.slotTarget[i]; }
+    this.lastSlot = 0;
+  }
+
+  /** P: rpm, thr, over, cyl, sg, agg, asp, boost, sc, mix[11], vol, width, mono, engineOn, popEvents[], bov, relief. out: intercalado L,R */
+  process(P, out, n) {
+    const R = this.rng;
+    if (P.cyl !== this.cyl) this.setCyl(P.cyl);
+    const cy = this.cyl, nS = this.nSlots, mix = P.mix, vol = P.vol, eng = P.engineOn;
+    this.sgS += (P.sg - this.sgS) * 0.2; this.aggS += (P.agg - this.aggS) * 0.2;
+    const sg = this.sgS, agg = this.aggS;
+    const tauD = (1.9 + 0.9 * Math.min(1.6, sg)) * 1e-3, tauA = 0.30e-3;
+    const aA = 1 - Math.exp(-1 / (tauA * SR)), aD = 1 - Math.exp(-1 / (tauD * SR)), pNorm = tauD * SR;
+    const open = Math.max(0, Math.min(1, (agg - 1) / 3));
+    const turboMuff = P.asp === 1 ? 0.8 : 1;
+    const fcBase = (560 + 1800 * open) * turboMuff * (0.92 + 0.12 * Math.min(1.5, sg));
+    const gComb = 0.36 + 0.16 * open;
+    const aDmp = pole(1400 + 1200 * open), aSub = pole(90);
+    const m0 = mix[0], m1 = mix[1], m2 = mix[2], m3 = mix[3], m4 = mix[4], m5 = mix[5], mTb = mix[7], mWh = mix[8], mRu = mix[9], mRe = mix[10];
+    const width = P.width;
+    const cylK = CYLK[cy] || 1, bassK = BASSK[cy] || 1;
+    for (let i = 0; i < 4; i++) { this.lf[i] += n * [0.31, 0.83, 1.9, 0.57][i] / SR; if (this.lf[i] >= 1) this.lf[i] -= 1; }
+    const l1 = Math.sin(TAU * this.lf[0]), l2 = Math.sin(TAU * this.lf[1]), l3 = Math.sin(TAU * this.lf[2]), l4 = Math.sin(TAU * this.lf[3]);
+    for (let i = 0; i < cy; i++) {
+      this.slotTarget[i] = Math.max(0.8, Math.min(1.2, this.slotTarget[i] + R.sym() * 0.012 + (1 - this.slotTarget[i]) * 0.004));
+      this.slotGain[i] += (this.slotTarget[i] - this.slotGain[i]) * 0.1;
+    }
+    while (P.popEvents && P.popEvents.length) {
+      const e = P.popEvents.shift(); const i = this.nextV; this.nextV = (this.nextV + 1) % this.nV;
+      const r = R.next(); const type = e[0], amp = e[1];
+      let fc, dec, th;
+      if (type === 1) { fc = 190 + 160 * r; dec = Math.exp(-1 / (0.050 * SR)); th = 1.0; }
+      else if (type === 0) { fc = 650 + 700 * r; dec = Math.exp(-1 / (0.016 * SR)); th = 0.35; }
+      else { fc = 140 + 120 * r; dec = Math.exp(-1 / (0.030 * SR)); th = 0.6; }
+      this.vSvf[i].set(fc, 1.6); this.vEnv[i] = amp; this.vDec[i] = dec; this.vTh[i] = amp * th; this.vThD[i] = Math.exp(-1 / (0.07 * SR));
+      this.vPh[i] = 0; this.vF[i] = 55 + 40 * r; this.vAmp[i] = amp; this.vDel[i] = (R.next() * 400) | 0;
+    }
+    if (P.bov > 0) { const b = P.bov; P.bov = 0; if (P.relief !== 1) this.bovEnv = Math.max(this.bovEnv, b); if (P.relief !== 0) this.flut = Math.max(this.flut, b); }
+
+    const aThrUp = pole(7), aThrDn = pole(2.2), aOv = pole(1.8);
+    const rpmTarget = P.rpm;
+    const flowBase = Math.pow(Math.max(0.15, this.rpmS / 6000), 0.8);
+    const boost = P.asp === 1 ? P.boost : 0, sc = P.asp === 2 ? P.sc : 0;
+    const aSh = pole(150);
+
+    for (let s = 0; s < n; s++) {
+      this.rpmS += (rpmTarget - this.rpmS) * (rpmTarget > this.rpmS ? 0.00055 : 0.00022);
+      const thrIn = P.thr;
+      this.thrS += (thrIn - this.thrS) * (thrIn > this.thrS ? aThrUp : aThrDn);
+      this.ovS += (P.over - this.ovS) * aOv;
+      const thr = this.thrS, ov = this.ovS;
+      const idleW = Math.max(0, Math.min(1, (1150 - this.rpmS) / 450));
+      if ((this.idleCnt++ & 4095) === 0) this.idleTgt = R.sym();
+      this.idleHunt += (this.idleTgt - this.idleHunt) * 0.0006;
+      const rpm = this.rpmS * (1 + 0.0025 * l1 + 0.0015 * l2 + 0.001 * l4) + this.idleHunt * (5 + 20 * idleW);
+      const dph = rpm / 120 / SR;
+      this.phase += dph; if (this.phase >= 1) this.phase -= 1;
+
+      const hd = this.head & 63; this.head++;
+      const injA = this.bankA.ring[hd], injB = this.bankB.ring[hd], injI = this.iRing[hd];
+      this.bankA.ring[hd] = 0; this.bankB.ring[hd] = 0; this.iRing[hd] = 0;
+      const fp = this.phase * nS; const slot = Math.min(nS - 1, fp | 0);
+      if (slot !== this.lastSlot) {
+        this.lastSlot = slot;
+        const frac = Math.min(1, Math.max(0, (fp - slot) / (dph * nS)));
+        const ccv = 0.03 + 0.045 * (1 - thr) + 0.03 * idleW;
+        const load = 0.10 + 0.90 * thr;
+        const burn = 1 - 0.85 * ov;
+        let amp = this.slotGain[slot] * (1 + ccv * R.gauss()) * (0.20 + 0.80 * Math.pow(load, 0.85)) * burn * cylK * sg * (1 + 0.15 * l3 * idleW);
+        if (!eng) amp = 0;
+        const jt = 1 + Math.max(0, 7 + 6 * R.gauss() * (0.4 + 0.6 * (1 - thr)) + 5 * idleW * R.gauss());   // jitter de tempo (amostras)
+        const d0 = jt | 0, w1 = frac, w0 = 1 - frac;                                                    // interpolacao linear (tempo fracionario)
+        const rg = (this.nBanks === 1 || this.slotBank[slot] === 0) ? this.bankA.ring : this.bankB.ring;
+        rg[(hd + d0) & 63] += amp * w0; rg[(hd + d0 + 1) & 63] += amp * w1;
+        const ia = this.slotGain[slot] * (0.12 + 0.88 * thr) * cylK * (1 + 0.5 * ccv * R.gauss());
+        this.iRing[(hd + d0 + 2) & 63] += ia * w0; this.iRing[(hd + d0 + 3) & 63] += ia * w1;
+        this.raspEnv = Math.min(1.5, this.raspEnv + Math.pow(thr, 1.3) * (0.5 + 0.5 * R.next()) * burn);
+        this.mechEnv = Math.min(1.5, this.mechEnv + 0.5 + 0.5 * R.next());
+      }
+
+      // ---- escapamento ----
+      const fcM = fcBase * (0.62 + 0.75 * thr);              // timbre abre com a carga
+      const aM = pole(fcM);
+      let exA = 0, exB = 0, bdA = 0, bdB = 0, sub = 0;
+      for (let b = 0; b < this.nBanks; b++) {
+        const bk = b === 0 ? this.bankA : this.bankB;
+        const x = b === 0 ? injA : injB;
+        bk.sA += aA * (x - bk.sA); bk.sD += aD * (bk.sA - bk.sD);
+        const p = bk.sD * pNorm;
+        let ri = bk.w - bk.D; if (ri < 0) ri += 1024;
+        bk.dmp += aDmp * (bk.buf[ri] - bk.dmp);
+        const c = p - gComb * bk.dmp;
+        bk.buf[bk.w] = c; bk.w = (bk.w + 1) & 1023;
+        const e = c + 0.60 * bk.m1.run(c) + 0.45 * bk.m2.run(c) + 0.28 * bk.m3.run(c);
+        bk.l1 += aM * (e - bk.l1); bk.l2 += aM * (bk.l1 - bk.l2);
+        bk.s1 += aSub * (p - bk.s1); bk.s2 += aSub * (bk.s1 - bk.s2);
+        bk.b1.run(p);
+        if (b === 0) { exA = bk.l2; bdA = bk.b1.lp; } else { exB = bk.l2; bdB = bk.b1.lp; }
+        sub += bk.s2;
+      }
+      let exL, exR, bdL, bdR;
+      if (this.nBanks === 1) { exL = exA; exR = exA; bdL = bdA; bdR = bdA; }
+      else {
+        const pa = 0.5 + 0.30 * width;
+        exL = (exA * pa + exB * (1 - pa)) * 1.4; exR = (exB * pa + exA * (1 - pa)) * 1.4;
+        bdL = (bdA * pa + bdB * (1 - pa)) * 1.4; bdR = (bdB * pa + bdA * (1 - pa)) * 1.4;
+        sub *= 0.7;
+      }
+
+      // ---- admissao ----
+      this.iA += aPI1 * (injI - this.iA); this.iD += aPI2 * (this.iA - this.iD);
+      const ip = this.iD * 4.0;
+      if ((s & 31) === 0) {
+        const fcI = 240 + 0.10 * this.rpmS + 520 * thr;
+        this.iL.set(fcI, 0.9); this.iR.set(fcI * 1.05, 0.9); this.aI = pole(fcI * 2.1);
+      }
+      const nbL = this.iL.run(R.sym()), nbR = this.iR.run(R.sym());
+      this.iL1 += this.aI * (nbL - this.iL1); this.iL2 += this.aI * (this.iL1 - this.iL2);
+      this.iR1 += this.aI * (nbR - this.iR1); this.iR2 += this.aI * (this.iR1 - this.iR2);
+      const fl = flowBase * (0.06 + 0.94 * Math.pow(thr, 1.25)) * (1 - 0.7 * ov) + 0.03 * flowBase * ov;
+      const iEnv = 0.6 + 1.0 * Math.abs(ip);
+      const nM = (this.iL2 + this.iR2) * 0.5, nS_ = (this.iL2 - this.iR2) * 0.5;
+      const inL = ip * 0.8 + (nM + width * nS_) * 5.5 * fl * iEnv, inR = ip * 0.8 + (nM - width * nS_) * 5.5 * fl * iEnv;
+
+      // ---- chiado de combustao e mecanico ----
+      this.raspEnv *= 0.9965; this.mechEnv *= 0.9972;
+      const wn = R.sym();
+      const rasp = (this.rasp1.run(wn) * 0.8 + this.rasp2.run(wn) * 0.5) * this.raspEnv * (0.3 + 0.7 * open + 0.1 * Math.min(3, agg));
+      const mechS = this.mech.run(R.sym()) * this.mechEnv * Math.min(1, this.rpmS / 5000);
+
+      // ---- turbo ----
+      this.nT += (boost - this.nT) * (boost > this.nT ? 0.00045 : 0.00012);
+      let tb = 0;
+      if (this.nT > 0.003 || this.bovEnv > 0.001 || this.flut > 0.001) {
+        this.wh1 += (1100 + 2100 * this.nT) / SR; if (this.wh1 >= 1) this.wh1 -= 1;
+        const whine = Math.sin(TAU * this.wh1) + 0.15 * Math.sin(TAU * 2 * this.wh1 + 0.6);
+        const air = this.tw.run(wn);
+        tb = (whine * 0.030 * mWh + air * 0.06 * mRu) * this.nT * this.nT * (0.35 + 0.65 * thr);
+        if (this.bovEnv > 0.001) { this.bovEnv *= 0.99992; this.bovSvf.set(2000 + 1400 * this.bovEnv, 1.1); tb += this.bovSvf.run(wn) * this.bovEnv * 0.9 * mRe; }
+        if (this.flut > 0.001) {
+          this.flut *= 0.99996; this.flutPh += (7 + 9 * this.flut) / SR; if (this.flutPh >= 1) this.flutPh -= 1;
+          const g = 0.5 + 0.5 * Math.sin(TAU * this.flutPh);
+          tb += this.flutSvf.run(wn) * g * g * g * this.flut * 6.0 * mRe;
+        }
+        tb *= mTb;
+      }
+      // ---- supercharger ----
+      let scs = 0;
+      if (sc > 0.01 || this.scA > 0.001) {
+        this.scA += (sc - this.scA) * 0.0006;
+        this.scPh += (300 + this.rpmS * 0.15) / SR; if (this.scPh >= 1) this.scPh -= 1;
+        const w = Math.sin(TAU * this.scPh) + 0.5 * Math.sin(TAU * 2 * this.scPh) + 0.25 * Math.sin(TAU * 3 * this.scPh);
+        this.scLP += 0.22 * (w - this.scLP);
+        scs = this.scLP * 0.045 * this.scA * mTb * (0.5 + 0.5 * thr);
+      }
+      // ---- estouros ----
+      let pp = 0;
+      for (let v = 0; v < this.nV; v++) {
+        if (this.vDel[v] > 0) { this.vDel[v]--; continue; }
+        if (this.vEnv[v] > 0.002 || this.vTh[v] > 0.002) {
+          const bandV = this.vSvf[v].run(R.sym()) * this.vEnv[v];
+          this.vPh[v] += this.vF[v] * (0.35 + 0.65 * this.vTh[v] / (this.vAmp[v] + 1e-6)) / SR;
+          pp += (bandV * 1.4 + Math.sin(TAU * this.vPh[v]) * this.vTh[v] * 0.9) * mix[6];
+          this.vEnv[v] *= this.vDec[v]; this.vTh[v] *= this.vThD[v];
+        }
+      }
+
+      // ---- mistura ----
+      const sh = 1 + 0.5 * (sg - 1);
+      let mL = 0, mR = 0;
+      if (eng) {
+        mL = m0 * sub * CAL.sub * sh * bassK + m1 * bdL * CAL.body * (0.5 + 0.5 * bassK) + m2 * exL * CAL.exh * (0.5 + 0.5 * thr) + m3 * inL * CAL.intake + m5 * rasp * CAL.rasp;
+        mR = m0 * sub * CAL.sub * sh * bassK + m1 * bdR * CAL.body * (0.5 + 0.5 * bassK) + m2 * exR * CAL.exh * (0.5 + 0.5 * thr) + m3 * inR * CAL.intake + m5 * rasp * CAL.rasp;
+        const mc = m4 * mechS * CAL.mech; mL += mc; mR += mc;
+      }
+      mL += tb + scs + pp; mR += tb + scs + pp;
+      this.hpL.run(mL); this.hpR.run(mR);
+      const yL = this.hpL.hp, yR = this.hpR.hp;
+      this.shL += aSh * (yL - this.shL); this.shR += aSh * (yR - this.shR);
+      const sg2 = 0.45 + 0.5 * Math.min(1.5, Math.max(0, sg - 0.8));
+      let oL = yL + this.shL * sg2, oR = yR + this.shR * sg2;
+      if (P.mono) { const mm = (oL + oR) * 0.5; oL = mm; oR = mm; }
+      out[2 * s] = Math.tanh(oL * vol * CAL.master); out[2 * s + 1] = Math.tanh(oR * vol * CAL.master);
+    }
+  }
+}
+const CYLK = { 3: 1, 4: 1, 6: 1, 8: 1, 10: 1, 12: 1 };
+const BASSK = { 3: 0.95, 4: 1, 6: 1.9, 8: 2.5, 10: 2.9, 12: 3.3 };
+const aPI1 = pole(380), aPI2 = pole(150);
+
+
+// Velocidade (GPS) -> marcha, rpm REAL do Mobi, pedal estimado, carga, turbo/supercharger e estouros.
+// Espelho 1:1 do EngineModel.kt
+const MOBI_K = [6.1, 11.1, 16.2, 21.3, 27.0];     // km/h por 1000 rpm em cada marcha (1.0 Fire Evo, pneu 175/65 R14)
+
+function newState() {
+  return {
+    // saidas do modelo
+    rpm: 850, thr: 0, over: 0, boost: 0, sc: 0, bov: 0, relief: 2, popEvents: [],
+    kmh: 0, gear: 0, sg: 1, agg: 1, learn: true, aggr: 0.5, ebrake: 0.5, grade: 0, testGrade: -99,
+    // configuracao
+    cyl: 4, asp: 0, powerCv: 105, massKg: 1000, drive: 1, idle: 850, red: 6300,
+    pops: false, engineOn: true, vol: 0.7, width: 0.25, mono: false, testKmh: -1,
+    mix: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  };
+}
+
+class EngineModel {
+  constructor(S) {
+    this.S = S; this.v = 0; this.gps = 0; this.acc = 0; this.pedal = 0; this.gear = 1; this.last = 0;
+    this.lastShift = -9999; this.shiftUntil = 0; this.prevPedal = 0; this.boostP = 0; this.scP = 0;
+    this.clutchIn = false; this.sched = []; this.heat = 0; this.wob = 0; this.limT = 0;
+  }
+  onSpeed(ms) { this.gps = ms; }
+  onAltitude(alt, vAcc) { if (vAcc > 25) return; this.altF = this.altF === undefined ? alt : this.altF + (alt - this.altF) * 0.25; }
+  updateGrade(kmh) {
+    if (kmh < 15 || this.altF === undefined) return;
+    this.ptD = this.ptD || []; this.ptA = this.ptA || []; this.ptN = this.ptN || 0; this.gradeF = this.gradeF || 0;
+    const last = this.ptN > 0 ? this.ptD[(this.ptN - 1) % 8] : -1e9;
+    if (this.dist - last < 40) return;
+    this.ptD[this.ptN % 8] = this.dist; this.ptA[this.ptN % 8] = this.altF; this.ptN++;
+    if (this.ptN >= 5) {
+      const oi = Math.max(0, this.ptN - 8) % 8; const span = this.dist - this.ptD[oi];
+      if (span >= 160) {
+        let g = (this.altF - this.ptA[oi]) / span;
+        g = Math.abs(g) < 0.008 ? 0 : g - Math.sign(g) * 0.008;
+        this.gradeF += (Math.max(-0.12, Math.min(0.12, g)) * 0.8 - this.gradeF) * 0.3;
+      }
+    }
+  }
+  learnStep(dt, kmh) {
+    const S = this.S; if (!S.learn || S.testKmh >= 0) return;
+    if (this.acc > 0.35 && kmh > 2) { this.accOn = true; this.accT = (this.accT || 0) + dt; this.accPeak = Math.max(this.accPeak || 0, this.acc); }
+    else if (this.accOn && this.acc < 0.15) {
+      if (this.accT > 1.5) { const x = Math.max(0, Math.min(1, (this.accPeak - 0.7) / 1.3)); S.aggr += (x - S.aggr) * 0.15; }
+      this.accOn = false; this.accT = 0; this.accPeak = 0;
+    }
+    if (this.acc < -0.25 && kmh > 25) { this.decOn = true; this.decT = (this.decT || 0) + dt; this.decSum = (this.decSum || 0) - this.acc * dt; }
+    else if (this.decOn && this.acc > -0.1) {
+      if (this.decT > 2) { const d = this.decSum / this.decT; const x = Math.max(0, Math.min(1, (1.6 - d) / 1.1)); S.ebrake += (x - S.ebrake) * 0.2; }
+      this.decOn = false; this.decT = 0; this.decSum = 0;
+    }
+  }
+
+  tick(now) {
+    const S = this.S; const sec = now / 1000;
+    const dt = this.last === 0 ? 0.05 : Math.min(0.2, Math.max(0.01, (now - this.last) / 1000)); this.last = now;
+    const v0 = this.v;
+    this.v += (this.gps - this.v) * (1 - Math.exp(-dt * 3.0));
+    const accRaw = (this.v - v0) / dt;
+    this.acc += (accRaw - this.acc) * Math.min(1, dt * 2.2);
+    const kmh = this.v * 3.6;
+    this.wob += ((Math.random() * 2 - 1) - this.wob) * Math.min(1, dt * 1.1);
+    this.dist = this.dist || 0; if (kmh > 15) this.dist += this.v * dt;
+    this.updateGrade(kmh); this.learnStep(dt, kmh);
+    const grade = S.testGrade > -50 ? S.testGrade : (this.gradeF || 0); S.grade = grade;
+
+    // ---- pedal estimado (carro de referencia: Mobi 75 cv / 1000 kg) ----
+    const rpmRef = Math.max(1000, S.rpm);
+    const r = rpmRef / 6000;
+    const avail = 75 * 735.5 * r * (1.35 - 0.35 * r);
+    const need = 0.012 * 1000 * 9.81 * this.v + 0.5 * 1.2 * 0.62 * this.v * this.v * this.v + 1000 * Math.max(-3, this.acc) * this.v + 1000 * 9.81 * grade * this.v;
+    let pedalRaw = Math.min(1, Math.max(0, need / avail));
+    if (kmh < 18 && this.acc > 0.25 && kmh > 1.5) pedalRaw = Math.max(pedalRaw, Math.min(0.9, 0.35 + 0.25 * this.acc));
+    if (kmh < 1.5) pedalRaw = 0;
+    this.prevPedal = this.pedal;
+    this.pedal += (pedalRaw - this.pedal) * (1 - Math.exp(-dt * (pedalRaw > this.pedal ? 4 + 4 * S.aggr : 2.5)));
+
+    // ---- carro virtual (peso / potencia / tipo) ----
+    const pw = (S.powerCv / S.massKg) / (75 / 1000);
+    S.agg = Math.min(8, Math.max(0.45, pw));
+    S.sg = Math.min(2.2, Math.max(0.75, Math.pow(S.powerCv / 75, 0.30)));
+
+    // ---- marchas ----
+    const style = Math.min(2, Math.max(0, S.drive | 0));
+    const p = this.pedal;
+    const STYLE = [0.92, 1.0, 1.25], UP = [9, 28, 37.5, 48.5], DN = [6, 22, 31, 42];
+    const habit = 0.88 + 0.24 * S.aggr;
+    const hill = 1 + Math.max(0, grade) * 8 * Math.min(1, p * 2);
+    const sc = STYLE[style] * habit * hill * (1 + 0.12 * Math.pow(p, 0.8));
+    const dnSc = STYLE[style] * (1 + 0.3 * (S.ebrake - 0.5)) * (p > 0.7 ? 1.08 : 1) * hill;
+    const rpmGear = (g) => kmh / MOBI_K[g - 1] * 1000;
+    if (kmh < 2.5) { this.gear = 1; }
+    else if (sec - this.lastShift > 0.9 && now >= this.shiftUntil) {
+      const upOk = kmh > UP[Math.min(this.gear, 4) - 1] * sc && p > 0.05 && (p < 0.7 || rpmGear(Math.min(this.gear + 1, 5)) > 1700);
+      if (this.gear < 5 && upOk) {
+        this.gear++; this.lastShift = sec; this.shiftUntil = now + 380;
+        if (S.pops && this.prevPedal > 0.5) this.shiftPops(now, true);
+        if (S.asp === 1 && this.boostP > 0.3) S.bov = this.boostP;
+      } else if (this.gear > 1 && (kmh < Math.min(DN[this.gear - 2] * dnSc, UP[this.gear - 2] * sc * 0.88) || (this.gear >= 3 && p > 0.92 && this.acc > 1.2 && rpmGear(this.gear) < 2100))) {
+        this.gear--; this.lastShift = sec; this.shiftUntil = now + 300;
+        if (S.pops && p < 0.2) this.shiftPops(now, false);
+      }
+    }
+    const shifting = now < this.shiftUntil;
+
+    // ---- embreagem: freando ate parar, o motorista pisa na embreagem e o motor cai para a lenta ----
+    this.clutchIn = kmh < 13 && p < 0.06 && this.acc < 0.1;
+
+    // ---- rpm ----
+    const idle = S.idle + 14 * Math.sin(now / 190) * 0.5;
+    let geared = rpmGear(this.gear);
+    let rpm;
+    if (kmh < 1.5 || this.clutchIn) rpm = idle + (this.clutchIn && kmh > 1.5 ? 90 : 0);
+    else {
+      rpm = geared;
+      if (this.gear === 1 && kmh < 16) {                          // arrancada: embreagem patinando
+        const slip = Math.max(0, 1 - kmh / 16);
+        const rc = idle + (2400 - idle) * Math.min(1, p * 1.7) * slip;
+        rpm = Math.max(rpm, rc);
+      }
+      rpm = Math.max(idle, rpm);
+    }
+    if (kmh > 3) rpm += Math.sin(now / 900) * 18 + this.wob * 35;
+    if (rpm > S.red) { this.limT = now; rpm = (Math.floor(now / 75) % 2 === 1) ? S.red : S.red - 280; }
+    S.rpm = rpm;
+
+    // ---- carga para o som ----
+    let thr = p;
+    if (kmh < 1.5) thr = 0.04;
+    if (shifting) thr = 0;
+    if (this.clutchIn) thr = Math.min(thr, 0.05);
+    const over = (!shifting && !this.clutchIn && p < 0.045 && (this.acc < -0.12 || grade < -0.02) && rpm > 1500) ? 1 : 0;
+    S.thr = thr; S.over = over; S.kmh = kmh; S.gear = (kmh < 1.5 ? 0 : this.gear);
+
+    // ---- turbo / supercharger ----
+    const lift = this.prevPedal > 0.35 && p < 0.12;
+    const liftT = this.prevPedal >= 0.35 && p < 0.35;
+    const bt = Math.min(1, Math.max(0, (rpm - 1400) / 2600)) * Math.pow(Math.min(1, p * 1.25), 1.1);
+    this.boostP += (bt - this.boostP) * (1 - Math.exp(-dt * (bt > this.boostP ? 2.8 : 3.2)));
+    S.boost = S.asp === 1 ? this.boostP : 0;
+    if (S.asp === 1 && liftT && this.boostP > 0.15) S.bov = Math.min(1, 0.35 + this.boostP * 1.4);
+    S.sc = S.asp === 2 ? (0.35 + 0.65 * Math.min(1, Math.max(0, (rpm - 900) / 3500))) * (0.4 + 0.6 * p) : 0;
+
+    // ---- estouros (so se ligado) ----
+    this.heat = Math.max(this.heat * (1 - dt * 0.25), p);
+    if (S.pops && lift && this.heat > 0.4 && rpm > 2200) this.liftPops(now);
+    if (S.pops && over && this.heat > 0.15 && Math.random() < dt * 9 * this.heat * Math.min(1, 0.3 + 0.4 * S.agg)) this.ev(2, 0.25 + 0.3 * Math.random(), now);
+    if (!S.pops) this.sched.length = 0;
+    for (let i = 0; i < this.sched.length;) {
+      const e = this.sched[i];
+      if (e.t <= now) { S.popEvents.push([e.type, e.amp]); this.sched.splice(i, 1); } else i++;
+    }
+  }
+  ev(type, amp, t) { this.sched.push({ t, type, amp: Math.min(1, Math.max(0, amp)) }); }
+  liftPops(now) {
+    const k = Math.min(1, 0.35 + 0.35 * this.S.agg);
+    let t = now + 60; this.ev(1, 0.8 * k, t);
+    const n = 3 + ((Math.random() * 5) | 0);
+    for (let i = 0; i < n; i++) { t += 55 + ((Math.random() * 140) | 0); this.ev(Math.random() < 0.3 ? 1 : 0, Math.max(0.25, 0.7 - 0.07 * i) * k * (0.7 + 0.3 * Math.random()), t); }
+    for (let i = 0; i < n + 2; i++) { t += 30 + ((Math.random() * 70) | 0); this.ev(2, (0.25 + 0.2 * Math.random()) * k, t); }
+  }
+  shiftPops(now, up) {
+    const k = Math.min(1, 0.35 + 0.35 * this.S.agg);
+    if (up) { this.ev(1, 0.7 * k, now + 70); this.ev(0, 0.5 * k, now + 140 + ((Math.random() * 60) | 0)); }
+    else { let t = now + 90; for (let i = 0; i < 3; i++) { this.ev(Math.random() < 0.4 ? 1 : 0, (0.8 - 0.1 * i) * k, t); t += 55 + ((Math.random() * 90) | 0); } }
+  }
+}
+const $=id=>document.getElementById(id);
+const SC={
+ 'Marcha lenta':[[0,0],[600,0]],
+ 'Cruzeiro 60':[[0,0],[10,60],[600,60]],
+ 'Arrancada 0–100':[[0,0],[1,0],[14,100],[600,100]],
+ 'Aceleração suave':[[0,0],[1,0],[16,50],[24,50],[34,60],[600,60]],
+ 'Ciclo completo':[[0,0],[1,0],[8,50],[14,50],[24,100],[30,100],[44,0],[600,0]],
+ 'Frear até parar':[[0,80],[1,80],[14,0],[600,0]]};
+const S=newState(); const M=new EngineModel(S); const D=new EngineDSP();
+let ctx=null,node=null,on=false,prof=SC['Marcha lenta'],t0=0,audioMs=0,tickAcc=0,gpsAcc=0,manual=null,speedKmh=0;
+function speedAt(t){const p=prof;if(t<=p[0][0])return p[0][1];for(let i=1;i<p.length;i++)if(t<=p[i][0]){const a=p[i-1],b=p[i];return a[1]+(b[1]-a[1])*(t-a[0])/(b[0]-a[0]);}return p[p.length-1][1];}
+function pick(name,btn){prof=SC[name];manual=null;t0=audioMs;M.v=0;M.gps=0;document.querySelectorAll('#scen button').forEach(b=>b.classList.toggle('active',b===btn));}
+const sc=$('scen');for(const k in SC){const b=document.createElement('button');b.textContent=k;b.onclick=()=>pick(k,b);sc.appendChild(b);}
+sc.firstChild.classList.add('active');
+$('man').oninput=e=>{manual=+e.target.value;$('mv').textContent=manual;document.querySelectorAll('#scen button').forEach(b=>b.classList.remove('active'));};
+function cfg(){S.learn=false;S.aggr=+$('ag').value/100;S.testGrade=+$('gr').value/100;$('vag').textContent=Math.round(S.aggr*100);$('vgr').textContent=+$('gr').value;S.powerCv=+$('cv').value;S.massKg=+$('kg').value;S.cyl=+$('cyl').value;S.asp=+$('asp').value;S.drive=+$('drv').value;S.vol=+$('vol').value/100;S.pops=$('pops').checked;
+ $('vcv').textContent=S.powerCv;$('vkg').textContent=S.massKg;$('vvol').textContent=Math.round(S.vol*100);}
+['cv','kg','cyl','asp','drv','vol','pops','ag','gr'].forEach(i=>$(i).addEventListener('input',cfg));cfg();
+const blk=new Float32Array(1024);
+function fill(L,R,n){let done=0;
+ while(done<n){const m=Math.min(512,n-done);
+  const dtms=m/SR*1000;audioMs+=dtms;tickAcc+=dtms;gpsAcc+=dtms;
+  const tgt=manual!==null?manual:speedAt((audioMs-t0)/1000);speedKmh=tgt;
+  if(gpsAcc>=500){gpsAcc-=500;M.onSpeed(tgt/3.6);}
+  if(tickAcc>=50){tickAcc-=50;M.tick(audioMs+1);}
+  D.process({rpm:S.rpm,thr:S.thr,over:S.over,cyl:S.cyl,sg:S.sg,agg:S.agg,asp:S.asp,boost:S.boost,sc:S.sc,mix:S.mix,vol:S.vol,width:S.width,mono:false,engineOn:true,popEvents:S.popEvents,bov:S.bov,relief:S.relief},blk,m);S.bov=0;
+  for(let i=0;i<m;i++){L[done+i]=blk[2*i];R[done+i]=blk[2*i+1];}
+  done+=m;}}
+$('power').onclick=async()=>{
+ if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:44100});
+  node=ctx.createScriptProcessor(2048,0,2);node.onaudioprocess=e=>{if(!on){e.outputBuffer.getChannelData(0).fill(0);e.outputBuffer.getChannelData(1).fill(0);return;}fill(e.outputBuffer.getChannelData(0),e.outputBuffer.getChannelData(1),e.outputBuffer.length);};
+  const an=ctx.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=.8;node.connect(an);an.connect(ctx.destination);window._an=an;}
+ await ctx.resume();on=!on;$('power').textContent=on?'Desligar o som':'Ligar o som';$('power').classList.toggle('on',on);};
+const cv=$('spec'),g=cv.getContext('2d');
+function ui(){$('kmh').textContent=Math.round(S.kmh);$('gear').textContent=S.gear?S.gear+'ª':'N';$('rpm').textContent=Math.round(S.rpm);
+ $('rbar').style.width=Math.max(0,Math.min(100,(S.rpm-850)/(6300-850)*100))+'%';$('rbar').style.background=S.rpm>5200?'var(--hot)':S.rpm>3800?'var(--accent)':'var(--ok)';
+ $('lbar').style.width=Math.round(S.thr*100)+'%';$('lpct').textContent=Math.round(S.thr*100)+'%';
+ g.fillStyle='#0e1114';g.fillRect(0,0,600,90);
+ if(window._an&&on){const a=new Uint8Array(window._an.frequencyBinCount);window._an.getByteFrequencyData(a);g.fillStyle='#ffb020';
+  for(let x=0;x<300;x++){const bin=Math.floor(Math.pow(x/300,2)*380)+1;const h=a[bin]/255*86;g.fillRect(x*2,90-h,1.6,h);}}
+ requestAnimationFrame(ui);}
+ui();
+</script>
